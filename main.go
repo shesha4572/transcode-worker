@@ -37,6 +37,8 @@ var currentStatus = WorkerPodStatus{PodName: "", IsAssignedTask: false, Assigned
 var finishModel = WorkerJobFinish{PodName: "", AssignedTaskId: "", MpdName: ""}
 var TR_CONTROLLER_URL = os.Getenv("TR_CONTROLLER_URL")
 var VIDEO_SERVER_URL = os.Getenv("VIDEO_SERVER_URL")
+var IS_WORKER_PERF_TEST = os.Getenv("IS_WORKER_PERF_TEST")
+var NUM_THREADS = os.Getenv("NUM_THREADS")
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
@@ -81,16 +83,10 @@ func contactController(endpoint string) {
 		fmt.Printf("Error getting response\n")
 		return
 	}
-	_, e := res.Body.Read(resBody)
-	if e != nil {
-		fmt.Printf("Error reading response body\n")
-		return
-	}
 	if err != nil {
 		fmt.Printf("Error sending %s to controller Response : %s\n", endpoint, resBody)
 		return
 	}
-	defer res.Body.Close()
 	fmt.Printf("Successfully sent %s to controller\n", endpoint)
 	return
 }
@@ -124,6 +120,7 @@ func performTranscode(job TranscodeJob) {
 	chunkName := fmt.Sprintf("%s_%s", job.VideoInternalFileId, RandomString(5))
 	finishModel.MpdName = chunkName
 	cmdArgs := []string{
+		"-threads", NUM_THREADS, "-filter_threads", NUM_THREADS,
 		"-ss", job.StartTime, "-to", job.EndTime, "-i", videoUrl,
 		"-map", "0:v:0", "-map", "0:a:0",
 		"-map", "0:v:0", "-map", "0:a:0",
@@ -159,7 +156,10 @@ func performTranscode(job TranscodeJob) {
 	if err := ffmpegCmd.Run(); err != nil {
 		fmt.Println("Could not run command: ", err.Error())
 	}
-	uploadChunks(job)
+	if IS_WORKER_PERF_TEST != "1" {
+		fmt.Printf("This is not a test transcode. Uploading chunks.\n")
+		uploadChunks(job)
+	}
 	cleanUp(job)
 
 }
